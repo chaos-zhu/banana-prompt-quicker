@@ -1,4 +1,4 @@
-const GITHUB_PROMPTS_URL = 'https://raw.githubusercontent.com/glidea/banana-prompt-quicker/main/prompts.json.js';
+const GITHUB_PROMPTS_URL = 'https://raw.githubusercontent.com/glidea/banana-prompt-quicker/main/prompts.json';
 const CACHE_KEY = 'banana_prompts_cache';
 const CACHE_TIMESTAMP_KEY = 'banana_prompts_cache_time';
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hours
@@ -22,8 +22,8 @@ window.PromptManager = {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const text = await response.text();
-            const data = new Function('return ' + text)();
+            const data = await response.json();
+
 
             // 3. Update cache
             await chrome.storage.local.set({
