@@ -288,6 +288,91 @@
             justify-content: center;
         }
 
+        /* Category Dropdown */
+        .category-dropdown {
+            position: relative;
+        }
+
+        .category-trigger {
+            padding: 8px 20px;
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: inherit;
+            min-width: 110px;
+            justify-content: center;
+        }
+
+        .category-trigger #categoryText {
+            flex: 1;
+            text-align: center;
+        }
+
+        .category-trigger:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
+        .category-trigger svg {
+            transition: transform 0.2s;
+            opacity: 0.6;
+        }
+
+        .category-trigger.active svg {
+            transform: rotate(180deg);
+        }
+
+        .category-options {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 100%;
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .category-options.show {
+            display: flex;
+        }
+
+        .category-option {
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 14px;
+            color: var(--text-primary);
+            border: none;
+            background: transparent;
+            text-align: left;
+            font-family: inherit;
+        }
+
+        .category-option:hover {
+            background: var(--surface-hover);
+        }
+
+        .category-option.selected {
+            background: var(--text-primary);
+            color: var(--background);
+            font-weight: 600;
+        }
+
         .filter-btn {
             padding: 8px 20px;
             border-radius: 999px;
@@ -894,7 +979,20 @@
                 <input type="text" id="searchInput" placeholder="搜索提示词、作者...">
             </div>
             <div class="filters">
-                <button class="filter-btn active" data-filter="all">全部</button>
+                <!-- Category Dropdown -->
+                <div class="category-dropdown">
+                    <button class="category-trigger" id="categoryTrigger">
+                        <span id="categoryText">全部</span>
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor"
+                            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 1L5 5L9 1" />
+                        </svg>
+                    </button>
+                    <div class="category-options" id="categoryOptions">
+                        <!-- Options will be populated dynamically -->
+                    </div>
+                </div>
+
                 <button class="filter-btn" data-filter="generate">生图</button>
                 <button class="filter-btn" data-filter="edit">编辑</button>
             </div>
@@ -976,12 +1074,16 @@
         const GITHUB_PROMPTS_URL = 'https://raw.githubusercontent.com/glidea/banana-prompt-quicker/main/prompts.json';
         let allPrompts = [];
         let currentFilter = 'all';
+        let currentCategory = 'all';
 
         // DOM Elements
         const grid = document.getElementById('promptsGrid');
         const searchInput = document.getElementById('searchInput');
         const filterBtns = document.querySelectorAll('.filter-btn');
         const toast = document.getElementById('toast');
+        const categoryTrigger = document.getElementById('categoryTrigger');
+        const categoryOptions = document.getElementById('categoryOptions');
+        const categoryText = document.getElementById('categoryText');
 
         // Fetch Prompts
         async function fetchPrompts() {
@@ -989,12 +1091,84 @@
                 const response = await fetch(GITHUB_PROMPTS_URL);
                 if (!response.ok) throw new Error('Failed to fetch');
                 allPrompts = await response.json();
+
+                // Initialize categories
+                initializeCategories();
+
                 renderPrompts(allPrompts);
             } catch (error) {
                 console.error('Error loading prompts:', error);
                 grid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; padding: 40px; color: var(--text-secondary);">加载失败，请检查网络连接</p>';
             }
         }
+
+        // Initialize Categories
+        function initializeCategories() {
+            const categories = new Set(['全部']);
+            allPrompts.forEach(prompt => {
+                if (prompt.category) {
+                    categories.add(prompt.category);
+                }
+            });
+
+            // Sort categories
+            const sortedCategories = Array.from(categories).sort((a, b) => {
+                if (a === '全部') return -1;
+                if (b === '全部') return 1;
+                return a.localeCompare(b, 'zh-CN');
+            });
+
+            // Populate dropdown
+            categoryOptions.innerHTML = '';
+            sortedCategories.forEach(cat => {
+                const option = document.createElement('button');
+                option.className = 'category-option';
+                option.textContent = cat;
+                if (cat === '全部') {
+                    option.classList.add('selected');
+                }
+
+                option.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectCategory(cat);
+                });
+
+                categoryOptions.appendChild(option);
+            });
+        }
+
+        // Select Category
+        function selectCategory(category) {
+            currentCategory = category === '全部' ? 'all' : category;
+            categoryText.textContent = category;
+
+            // Update selected state
+            categoryOptions.querySelectorAll('.category-option').forEach(opt => {
+                opt.classList.toggle('selected', opt.textContent === category);
+            });
+
+            // Close dropdown
+            categoryOptions.classList.remove('show');
+            categoryTrigger.classList.remove('active');
+
+            // Filter prompts
+            filterPrompts();
+        }
+
+        // Toggle Category Dropdown
+        categoryTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            categoryOptions.classList.toggle('show');
+            categoryTrigger.classList.toggle('active');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!categoryTrigger.contains(e.target) && !categoryOptions.contains(e.target)) {
+                categoryOptions.classList.remove('show');
+                categoryTrigger.classList.remove('active');
+            }
+        });
 
         // Render Prompts
         function renderPrompts(prompts) {
@@ -1058,9 +1232,11 @@
                     prompt.author.toLowerCase().includes(searchTerm) ||
                     prompt.prompt.toLowerCase().includes(searchTerm);
 
-                const matchesFilter = currentFilter === 'all' || prompt.mode === currentFilter;
+                const matchesMode = currentFilter === 'all' || prompt.mode === currentFilter;
 
-                return matchesSearch && matchesFilter;
+                const matchesCategory = currentCategory === 'all' || prompt.category === currentCategory;
+
+                return matchesSearch && matchesMode && matchesCategory;
             });
 
             renderPrompts(filtered);
@@ -1088,12 +1264,20 @@
 
         filterBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                // Update UI
-                filterBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+                const clickedFilter = btn.dataset.filter;
 
-                // Update State
-                currentFilter = btn.dataset.filter;
+                // 如果点击的是已选中的按钮，取消选中（显示全部）
+                if (btn.classList.contains('active')) {
+                    btn.classList.remove('active');
+                    currentFilter = 'all';
+                } else {
+                    // 取消其他按钮的选中状态
+                    filterBtns.forEach(b => b.classList.remove('active'));
+                    // 选中当前按钮
+                    btn.classList.add('active');
+                    currentFilter = clickedFilter;
+                }
+
                 filterPrompts();
             });
         });

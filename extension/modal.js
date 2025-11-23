@@ -5,6 +5,8 @@ class BananaModal {
         this.activeFilters = new Set()
         this.prompts = []
         this.customPrompts = []
+        this.categories = new Set(['全部'])
+        this.selectedCategory = 'all'
         this.loadPrompts()
         this.currentPage = 1
         this.pageSize = this.isMobile() ? 8 : 12
@@ -19,7 +21,92 @@ class BananaModal {
         }
         this.customPrompts = await this.getCustomPrompts()
         this.prompts = [...this.customPrompts, ...staticPrompts]
+
+        // Aggregate categories
+        this.categories = new Set(['全部'])
+        this.prompts.forEach(p => {
+            if (p.category) {
+                this.categories.add(p.category)
+            }
+        })
+
+        this.updateCategoryDropdown()
         this.applyFilters()
+    }
+
+    updateCategoryDropdown() {
+        const optionsContainer = document.getElementById('category-options-container')
+        const triggerText = document.getElementById('category-trigger-text')
+        if (!optionsContainer || !triggerText) return
+
+        this.populateCategoryDropdown(optionsContainer, triggerText)
+    }
+
+    populateCategoryDropdown(optionsContainer, triggerText) {
+        console.log('Populating categories:', this.categories)
+        // Clear existing options
+        optionsContainer.innerHTML = ''
+
+        // Populate categories
+        const sortedCategories = Array.from(this.categories).sort((a, b) => {
+            if (a === '全部') return -1
+            if (b === '全部') return 1
+            return a.localeCompare(b)
+        })
+
+        if (sortedCategories.length === 0) {
+            const empty = document.createElement('div')
+            empty.textContent = '无分类'
+            empty.style.cssText = `padding: 10px 16px; font-size: 14px; color: ${this.adapter.getThemeColors().textSecondary};`
+            optionsContainer.appendChild(empty)
+        }
+
+        sortedCategories.forEach(cat => {
+            const option = document.createElement('div')
+            option.textContent = cat
+            const currentLabel = this.selectedCategory === 'all' ? '全部' : this.selectedCategory
+            const isSelected = cat === currentLabel
+            const colors = this.adapter.getThemeColors()
+
+            const baseStyle = `padding: 10px 16px; cursor: pointer; transition: all 0.2s; font-size: 14px;`
+            const selectedStyle = isSelected
+                ? `background: ${colors.primary}15; color: ${colors.primary}; font-weight: 600;`
+                : `background: transparent; color: ${colors.text};`
+            option.style.cssText = baseStyle + selectedStyle
+
+            option.onmouseenter = () => {
+                if (!isSelected) {
+                    option.style.background = colors.surfaceHover
+                }
+                option.style.boxShadow = `0 2px 8px ${colors.shadow}`
+            }
+            option.onmouseleave = () => {
+                if (!isSelected) {
+                    option.style.background = 'transparent'
+                } else {
+                    option.style.background = `${colors.primary}15`
+                }
+                option.style.boxShadow = 'none'
+            }
+
+            option.onclick = (e) => {
+                e.stopPropagation()
+                this.selectedCategory = cat === '全部' ? 'all' : cat
+                triggerText.textContent = cat
+
+                // Hide dropdown
+                optionsContainer.style.display = 'none'
+                optionsContainer.setAttribute('data-visible', 'false')
+
+                this.applyFilters()
+            }
+
+            optionsContainer.appendChild(option)
+        })
+
+        // Reset trigger text if needed
+        const currentLabel = this.selectedCategory === 'all' ? '全部' : this.selectedCategory
+        triggerText.textContent = currentLabel
     }
 
     async getCustomPrompts() {
@@ -33,6 +120,7 @@ class BananaModal {
             document.body.appendChild(this.modal)
         }
         this.modal.style.display = 'flex'
+        this.updateCategoryDropdown()
         this.applyFilters()
     }
 
@@ -55,8 +143,10 @@ class BananaModal {
         modalElement.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 1000;'
 
         const container = document.createElement('div')
-        container.style.cssText = `background: ${colors.background}; border-radius: ${mobile ? '24px 24px 0 0' : '20px'}; box-shadow: 0 20px 60px ${colors.shadow}; max-width: ${mobile ? '100%' : '900px'}; width: ${mobile ? '100%' : '90%'}; max-height: ${mobile ? '90vh' : '85vh'}; display: flex; flex-direction: column; ${mobile ? 'margin-top: auto;' : ''}; overflow: hidden;`
-        container.onclick = (e) => e.stopPropagation()
+        // Removed overflow: hidden to allow dropdown to show
+        container.style.cssText = `background: ${colors.background}; border-radius: ${mobile ? '24px 24px 0 0' : '20px'}; box-shadow: 0 20px 60px ${colors.shadow}; max-width: ${mobile ? '100%' : '900px'}; width: ${mobile ? '100%' : '90%'}; max-height: ${mobile ? '90vh' : '85vh'}; display: flex; flex-direction: column; ${mobile ? 'margin-top: auto;' : ''}; overflow: visible;`
+        // Remove stopPropagation to allow clicks to bubble to document for dropdown closing
+        // container.onclick = (e) => e.stopPropagation()
 
         const searchSection = this.createSearchSection(colors, mobile)
         const content = this.createContent(colors, mobile)
@@ -65,7 +155,11 @@ class BananaModal {
         container.appendChild(content)
         modalElement.appendChild(container)
 
-        modalElement.addEventListener('click', () => this.hide())
+        modalElement.addEventListener('click', (e) => {
+            if (e.target === modalElement) {
+                this.hide()
+            }
+        })
 
         if (mobile) {
             modalElement.addEventListener('touchstart', (e) => {
@@ -80,7 +174,8 @@ class BananaModal {
 
     createSearchSection(colors, mobile) {
         const searchSection = document.createElement('div')
-        searchSection.style.cssText = `padding: ${mobile ? '16px' : '20px 24px'}; border-bottom: 1px solid ${colors.border}; display: flex; ${mobile ? 'flex-direction: column; gap: 12px;' : 'align-items: center; gap: 16px;'}`
+        // Ensure overflow is visible so dropdown can show
+        searchSection.style.cssText = `padding: ${mobile ? '16px' : '20px 24px'}; border-bottom: 1px solid ${colors.border}; display: flex; ${mobile ? 'flex-direction: column; gap: 12px;' : 'align-items: center; gap: 16px;'}; overflow: visible; z-index: 100; position: relative;`
 
         const searchInput = document.createElement('input')
         searchInput.type = 'text'
@@ -98,7 +193,80 @@ class BananaModal {
         })
 
         const filterContainer = document.createElement('div')
-        filterContainer.style.cssText = `display: flex; gap: 8px; ${mobile ? 'justify-content: center; flex-wrap: wrap;' : ''}`
+        filterContainer.style.cssText = `display: flex; gap: 8px; align-items: center; ${mobile ? 'justify-content: space-between; flex-wrap: wrap;' : ''}; position: relative; z-index: 101;`
+
+        // Category Dropdown
+        // Custom Category Dropdown
+        const dropdownContainer = document.createElement('div')
+        dropdownContainer.style.cssText = `position: relative; z-index: 1000;`
+
+        const dropdownTrigger = document.createElement('div')
+        dropdownTrigger.id = 'category-dropdown-trigger'
+        dropdownTrigger.style.cssText = `padding: ${mobile ? '10px 14px' : '8px 12px'}; border: 1px solid ${colors.border}; border-radius: 16px; background: ${colors.surface}; color: ${colors.text}; font-size: ${mobile ? '14px' : '13px'}; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; width: 60px; justify-content: space-between; user-select: none;`
+
+        const triggerText = document.createElement('span')
+        triggerText.id = 'category-trigger-text'
+        triggerText.textContent = this.selectedCategory === 'all' ? '全部' : this.selectedCategory
+        triggerText.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: center;'
+
+        const arrowIcon = document.createElement('span')
+        arrowIcon.innerHTML = `<svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1L5 5L9 1"/></svg>`
+        arrowIcon.style.cssText = `display: flex; align-items: center; transition: transform 0.2s; opacity: 0.6;`
+
+        dropdownTrigger.appendChild(triggerText)
+        dropdownTrigger.appendChild(arrowIcon)
+
+        const optionsContainer = document.createElement('div')
+        optionsContainer.id = 'category-options-container'
+        // Increase z-index to ensure it sits on top of everything
+        optionsContainer.style.cssText = `position: absolute; top: 100%; left: 0; margin-top: 8px; width: 100%; background: ${colors.surface}; border: 1px solid ${colors.border}; border-radius: 16px; box-shadow: 0 10px 40px ${colors.shadow}; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); max-height: 300px; overflow-y: auto; z-index: 9999;`
+        optionsContainer.setAttribute('data-visible', 'false')
+
+        // Toggle Logic
+        dropdownTrigger.onclick = (e) => {
+            e.stopPropagation()
+            console.log('Dropdown clicked')
+            const isVisible = optionsContainer.getAttribute('data-visible') === 'true'
+            if (isVisible) {
+                optionsContainer.style.display = 'none'
+                optionsContainer.setAttribute('data-visible', 'false')
+                arrowIcon.style.transform = 'rotate(0deg)'
+            } else {
+                optionsContainer.style.display = 'flex'
+                optionsContainer.setAttribute('data-visible', 'true')
+                arrowIcon.style.transform = 'rotate(180deg)'
+                console.log('Dropdown opened', optionsContainer)
+            }
+        }
+
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            if (optionsContainer.getAttribute('data-visible') === 'true' && !dropdownContainer.contains(e.target)) {
+                optionsContainer.style.display = 'none'
+                optionsContainer.setAttribute('data-visible', 'false')
+                arrowIcon.style.transform = 'rotate(0deg)'
+            }
+        })
+
+        if (!mobile) {
+            dropdownTrigger.onmouseenter = () => {
+                dropdownTrigger.style.borderColor = colors.primary
+                dropdownTrigger.style.boxShadow = `0 2px 8px ${colors.shadow}`
+            }
+            dropdownTrigger.onmouseleave = () => {
+                dropdownTrigger.style.borderColor = colors.border
+                dropdownTrigger.style.boxShadow = 'none'
+            }
+        }
+
+        dropdownContainer.appendChild(dropdownTrigger)
+        dropdownContainer.appendChild(optionsContainer)
+
+        // Populate immediately
+        this.populateCategoryDropdown(optionsContainer, triggerText)
+
+        const buttonsContainer = document.createElement('div')
+        buttonsContainer.style.cssText = `display: flex; gap: 8px; ${mobile ? 'flex: 1; justify-content: flex-end;' : ''}`
 
         const filters = [
             { key: 'favorite', label: '收藏' },
@@ -113,7 +281,7 @@ class BananaModal {
             btn.textContent = filter.label
             btn.style.cssText = `padding: ${mobile ? '10px 18px' : '8px 18px'}; border: 1px solid ${colors.border}; border-radius: 20px; background: ${colors.surface}; color: ${colors.text}; font-size: ${mobile ? '14px' : '13px'}; cursor: pointer; transition: all 0.25s ease; white-space: nowrap; touch-action: manipulation;`
             btn.onclick = () => this.toggleFilter(filter.key)
-            filterContainer.appendChild(btn)
+            buttonsContainer.appendChild(btn)
         })
 
         const addBtn = document.createElement('button')
@@ -122,7 +290,10 @@ class BananaModal {
         addBtn.style.cssText = `padding: ${mobile ? '10px 18px' : '8px 18px'}; border: 1px solid ${colors.primary}; border-radius: 20px; background: ${colors.primary}; color: white; font-size: ${mobile ? '18px' : '16px'}; font-weight: 600; cursor: pointer; transition: all 0.25s ease; display: flex; align-items: center; justify-content: center; line-height: 1; box-shadow: 0 2px 8px ${colors.shadow};`
         addBtn.onclick = () => this.showAddPromptModal()
 
-        filterContainer.appendChild(addBtn)
+        buttonsContainer.appendChild(addBtn)
+
+        filterContainer.appendChild(dropdownContainer)
+        filterContainer.appendChild(buttonsContainer)
 
         searchSection.appendChild(searchInput)
         searchSection.appendChild(filterContainer)
@@ -223,6 +394,11 @@ class BananaModal {
                 prompt.author.toLowerCase().includes(keyword)
 
             if (!matchesSearch) return false
+
+            // Category Filter
+            if (this.selectedCategory !== 'all' && prompt.category !== this.selectedCategory) {
+                return false
+            }
 
             if (this.activeFilters.size === 0) return true
 
@@ -574,6 +750,128 @@ class BananaModal {
         const titleInput = createInput('标题')
         const promptInput = createInput('Prompt 内容', true)
 
+        // Category Dropdown for Add Prompt
+        const categoryContainer = document.createElement('div')
+        categoryContainer.style.cssText = 'position: relative; width: 100%; z-index: 10;'
+
+        const categoryTrigger = document.createElement('div')
+        categoryTrigger.style.cssText = `width: 100%; padding: ${mobile ? '14px 16px' : '12px 16px'}; border: 1px solid ${colors.inputBorder}; border-radius: 12px; background: ${colors.inputBg}; color: ${colors.text}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;`
+
+        // Populate categories
+        // Populate categories
+        const addCategories = Array.from(this.categories)
+            .filter(c => c !== '全部')
+            .sort((a, b) => a.localeCompare(b))
+
+        let selectedAddCategory = addCategories[0]
+        const categoryTriggerText = document.createElement('span')
+        categoryTriggerText.textContent = selectedAddCategory
+
+        const categoryArrow = document.createElement('span')
+        categoryArrow.innerHTML = `<svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1L5 5L9 1"/></svg>`
+        categoryArrow.style.cssText = `display: flex; align-items: center; transition: transform 0.2s; opacity: 0.6;`
+
+        categoryTrigger.appendChild(categoryTriggerText)
+        categoryTrigger.appendChild(categoryArrow)
+
+        const categoryOptions = document.createElement('div')
+        categoryOptions.style.cssText = `position: absolute; top: 100%; left: 0; margin-top: 8px; width: 100%; background: ${colors.surface}; border: 1px solid ${colors.border}; border-radius: 12px; box-shadow: 0 10px 40px ${colors.shadow}; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); max-height: 200px; overflow-y: auto; z-index: 100;`
+
+        // Populate categories
+        addCategories.forEach(cat => {
+            const option = document.createElement('div')
+            option.textContent = cat
+            const isSelected = cat === selectedAddCategory
+
+            const baseStyle = `padding: 10px 16px; cursor: pointer; transition: all 0.2s; font-size: 14px;`
+            const selectedStyle = isSelected
+                ? `background: ${colors.primary}15; color: ${colors.primary}; font-weight: 600;`
+                : `background: transparent; color: ${colors.text};`
+            option.style.cssText = baseStyle + selectedStyle
+
+            option.onmouseenter = () => {
+                if (!isSelected) {
+                    option.style.background = colors.surfaceHover
+                }
+                option.style.boxShadow = `0 2px 8px ${colors.shadow}`
+            }
+            option.onmouseleave = () => {
+                if (!isSelected) {
+                    option.style.background = 'transparent'
+                } else {
+                    option.style.background = `${colors.primary}15`
+                }
+                option.style.boxShadow = 'none'
+            }
+
+            option.onclick = (e) => {
+                e.stopPropagation()
+                selectedAddCategory = cat
+                categoryTriggerText.textContent = cat
+                categoryOptions.style.display = 'none'
+                categoryArrow.style.transform = 'rotate(0deg)'
+
+                // 重新渲染选项以更新高亮状态
+                categoryOptions.innerHTML = ''
+                addCategories.forEach(c => {
+                    const opt = document.createElement('div')
+                    opt.textContent = c
+                    const selected = c === selectedAddCategory
+
+                    const base = `padding: 10px 16px; cursor: pointer; transition: all 0.2s; font-size: 14px;`
+                    const style = selected
+                        ? `background: ${colors.primary}15; color: ${colors.primary}; font-weight: 600;`
+                        : `background: transparent; color: ${colors.text};`
+                    opt.style.cssText = base + style
+
+                    opt.onmouseenter = () => {
+                        if (!selected) opt.style.background = colors.surfaceHover
+                        opt.style.boxShadow = `0 2px 8px ${colors.shadow}`
+                    }
+                    opt.onmouseleave = () => {
+                        if (!selected) {
+                            opt.style.background = 'transparent'
+                        } else {
+                            opt.style.background = `${colors.primary}15`
+                        }
+                        opt.style.boxShadow = 'none'
+                    }
+
+                    opt.onclick = (e) => {
+                        e.stopPropagation()
+                        selectedAddCategory = c
+                        categoryTriggerText.textContent = c
+                        categoryOptions.style.display = 'none'
+                        categoryArrow.style.transform = 'rotate(0deg)'
+                    }
+                    categoryOptions.appendChild(opt)
+                })
+            }
+            categoryOptions.appendChild(option)
+        })
+
+        categoryTrigger.onclick = (e) => {
+            e.stopPropagation()
+            const isVisible = categoryOptions.style.display === 'flex'
+            categoryOptions.style.display = isVisible ? 'none' : 'flex'
+            categoryArrow.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)'
+        }
+
+        // Close dropdown when clicking outside
+        const closeDropdown = (e) => {
+            if (!categoryContainer.contains(e.target)) {
+                categoryOptions.style.display = 'none'
+                categoryArrow.style.transform = 'rotate(0deg)'
+            }
+        }
+        document.addEventListener('click', closeDropdown)
+
+        // Cleanup listener when modal closes
+        const cleanup = () => document.removeEventListener('click', closeDropdown)
+
+        categoryContainer.appendChild(categoryTrigger)
+        categoryContainer.appendChild(categoryOptions)
+
         const modeContainer = document.createElement('div')
         modeContainer.style.display = 'flex'
         modeContainer.style.gap = '16px'
@@ -604,7 +902,10 @@ class BananaModal {
         const cancelBtn = document.createElement('button')
         cancelBtn.textContent = '取消'
         cancelBtn.style.cssText = `padding: ${mobile ? '12px 24px' : '10px 20px'}; border: 1px solid ${colors.border}; border-radius: 12px; background: transparent; color: ${colors.text}; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease;`
-        cancelBtn.onclick = () => document.body.removeChild(overlay)
+        cancelBtn.onclick = () => {
+            cleanup()
+            document.body.removeChild(overlay)
+        }
 
         if (!mobile) {
             cancelBtn.onmouseenter = () => {
@@ -632,9 +933,11 @@ class BananaModal {
             await this.saveCustomPrompt({
                 title: titleVal,
                 prompt: promptVal,
-                mode: selectedMode
+                mode: selectedMode,
+                category: selectedAddCategory
             })
             document.body.removeChild(overlay)
+            cleanup()
         }
 
         if (!mobile) {
@@ -653,6 +956,7 @@ class BananaModal {
 
         dialog.appendChild(title)
         dialog.appendChild(titleInput)
+        dialog.appendChild(categoryContainer)
         dialog.appendChild(promptInput)
         dialog.appendChild(modeContainer)
         dialog.appendChild(btnContainer)
