@@ -25,7 +25,8 @@
 ## 🚀 安装
 
 ### Chrome Web Store 安装
-WIP，上架中
+
+https://chromewebstore.google.com/detail/banana-prompt-quicker/hgfgfocicepifbolifedlokjkknigoid?authuser=0&hl=zh-CN
 
 ### 手动安装
 
